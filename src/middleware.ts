@@ -28,8 +28,13 @@ export async function middleware(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     // Protect dashboard route
-    if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
-        return NextResponse.redirect(new URL('/login', request.url))
+    if (request.nextUrl.pathname.startsWith('/dashboard')) {
+        if (!user) {
+            return NextResponse.redirect(new URL('/login', request.url))
+        }
+        if (!user.email_confirmed_at) {
+            return NextResponse.redirect(new URL('/login?error=unconfirmed', request.url))
+        }
     }
 
     return supabaseResponse

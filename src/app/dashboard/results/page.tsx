@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAnalysisStore } from "@/src/store/useAnalysisStore";
 
-export default function ResultsPage() {
+function ResultsContent() {
     const { result, setIsAnalyzing } = useAnalysisStore();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const fromHistory = searchParams.get("from") === "history";
 
     useEffect(() => {
         setIsAnalyzing(false);
         if (!result) router.push("/dashboard/analyze");
-    }, [result]);
+    }, [result, router, setIsAnalyzing]);
 
     if (!result) return null;
 
@@ -36,11 +38,11 @@ export default function ResultsPage() {
             {/* Back + Header */}
             <div className="flex flex-col gap-3">
                 <Link
-                    href="/dashboard/analyze"
+                    href={fromHistory ? "/dashboard/history" : "/dashboard/analyze"}
                     className="group inline-flex items-center gap-2 bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-violet-500/50 text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 shadow-sm hover:shadow-violet-900/20 active:scale-[0.98] hover:-translate-y-0.5 w-fit"
                 >
                     <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1">←</span>
-                    <span>New Analysis</span>
+                    <span>{fromHistory ? "Back to History" : "New Analysis"}</span>
                 </Link>
                 <h1 className="text-3xl font-bold mt-2">Your Results</h1>
                 <p className="text-gray-400">Here's how your resume matches this job.</p>
@@ -148,5 +150,20 @@ export default function ResultsPage() {
                 </Link>
             </div>
         </main>
+    );
+}
+
+export default function ResultsPage() {
+    return (
+        <Suspense fallback={
+            <main className="max-w-4xl mx-auto px-8 py-12 flex flex-col gap-8 text-center text-gray-400">
+                <div className="flex flex-col items-center gap-4 py-20">
+                    <div className="w-10 h-10 rounded-full border-4 border-violet-500 border-t-transparent animate-spin" />
+                    <p className="text-sm font-medium">Loading analysis results...</p>
+                </div>
+            </main>
+        }>
+            <ResultsContent />
+        </Suspense>
     );
 }

@@ -1,17 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "@/src/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam === "unconfirmed") {
+      setError("Please confirm your email address. A verification link was sent to your device.");
+    } else if (errorParam) {
+      setError(errorParam);
+    }
+  }, [searchParams]);
 
   async function handleLogin() {
     setLoading(true);
@@ -78,5 +88,19 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center text-gray-400">
+          Loading login form...
+        </div>
+      </main>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
