@@ -105,14 +105,18 @@ function ResultsContent() {
                             ✅ Highlight These
                         </p>
                         <div className="flex flex-wrap gap-2">
-                            {result.skills.highlight.map((skill) => (
-                                <span
-                                    key={skill}
-                                    className="bg-green-900/30 border border-green-700 text-green-300 text-sm px-3 py-1 rounded-full"
-                                >
-                                    {skill}
-                                </span>
-                            ))}
+                            {result.skills?.highlight?.length > 0 ? (
+                                result.skills.highlight.map((skill) => (
+                                    <span
+                                        key={skill}
+                                        className="bg-green-900/30 border border-green-700 text-green-300 text-sm px-3 py-1 rounded-full"
+                                    >
+                                        {skill}
+                                    </span>
+                                ))
+                            ) : (
+                                <p className="text-gray-500 text-xs italic">No matching skills to highlight found.</p>
+                            )}
                         </div>
                     </div>
                     <div className="flex flex-col gap-3">
@@ -120,14 +124,18 @@ function ResultsContent() {
                             📚 Learn These
                         </p>
                         <div className="flex flex-wrap gap-2">
-                            {result.skills.learn.map((skill) => (
-                                <span
-                                    key={skill}
-                                    className="bg-yellow-900/30 border border-yellow-700 text-yellow-300 text-sm px-3 py-1 rounded-full"
-                                >
-                                    {skill}
-                                </span>
-                            ))}
+                            {result.skills?.learn?.length > 0 ? (
+                                result.skills.learn.map((skill) => (
+                                    <span
+                                        key={skill}
+                                        className="bg-yellow-900/30 border border-yellow-700 text-yellow-300 text-sm px-3 py-1 rounded-full"
+                                    >
+                                        {skill}
+                                    </span>
+                                ))
+                            ) : (
+                                <p className="text-gray-500 text-xs italic">No critical skill gaps identified.</p>
+                            )}
                         </div>
                     </div>
                 </div>

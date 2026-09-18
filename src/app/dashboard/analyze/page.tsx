@@ -54,29 +54,40 @@ export default function AnalyzePage() {
       setStepDone(0);
 
       setStepActive(1);
-      setTimeout(() => setStepActive(2), 15000);
-      setTimeout(() => setStepActive(3), 30000);
-      setTimeout(() => setStepActive(4), 45000);
+      let currentStep = 1;
+      const stepInterval = setInterval(() => {
+        if (currentStep < 4) {
+          setStepDone(currentStep);
+          currentStep += 1;
+          setStepActive(currentStep);
+        }
+      }, 700);
 
-      const analyzeRes = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resumeText: extractData.text,
-          jobDescription,
-        }),
-      });
+      try {
+        const analyzeRes = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resumeText: extractData.text,
+            jobDescription,
+          }),
+        });
 
-      const analyzeData = await analyzeRes.json();
-      if (!analyzeRes.ok) throw new Error(analyzeData.error || "Analysis failed");
+        const analyzeData = await analyzeRes.json();
+        if (!analyzeRes.ok) throw new Error(analyzeData.error || "Analysis failed");
 
-      setStepDone(1);
-      setStepDone(2);
-      setStepDone(3);
-      setStepDone(4);
+        clearInterval(stepInterval);
+        setStepDone(1);
+        setStepDone(2);
+        setStepDone(3);
+        setStepDone(4);
 
-      setResult(analyzeData);
-      router.push("/dashboard/results");
+        setResult(analyzeData);
+        router.push("/dashboard/results");
+      } catch (err) {
+        clearInterval(stepInterval);
+        throw err;
+      }
 
     } catch (err: any) {
       setError(err.message || "Something went wrong.");

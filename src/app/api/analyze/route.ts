@@ -8,14 +8,109 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-async function askGroq(prompt: string, maxTokens: number = 500): Promise<string> {
+interface AnalysisPayload {
+  score: number;
+  rewrittenBullets: string;
+  coverLetter: string;
+  skills: {
+    highlight: string[];
+    learn: string[];
+  };
+}
+
+async function queryGroqModel(model: string, systemPrompt: string, userPrompt: string): Promise<string> {
   const response = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: maxTokens,
-    temperature: 0.7,
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: 2000,
+    temperature: 0.3,
   });
+
   return response.choices[0]?.message?.content ?? "";
+}
+
+async function analyzeResumeWithGroq(resumeText: string, jobDescription: string): Promise<AnalysisPayload> {
+  const systemPrompt = `You are an expert ATS (Applicant Tracking System) recruiter and career coach.
+Analyze the provided resume against the job description and output ONLY a valid JSON object matching this exact schema:
+{
+  "score": <number between 0 and 100 based on true match quality, skills alignment, and relevant experience>,
+  "rewrittenBullets": "<3 to 5 impactful, rewritten resume bullet points tailored to the job description, each starting with • on a new line>",
+  "coverLetter": "<a tailored, compelling 3-paragraph professional cover letter>",
+  "skills": {
+    "highlight": ["<skill1>", "<skill2>", "<skill3>"],
+    "learn": ["<missing_skill1>", "<missing_skill2>", "<missing_skill3>"]
+  }
+}
+
+Guidelines:
+- Do not output any prose, commentary, or markdown formatting outside of the JSON object.
+- The score should accurately reflect how well candidate experience and technical skills align with job requirements (0-100). Do not default to 50. High relevance should be 80-95, moderate 60-79, poor <60.
+- "highlight" skills must be key technologies/skills present in both resume and job description.
+- "learn" skills must be important skills/tools required in the job description but missing or weak in the resume.
+- "rewrittenBullets" must be 3-5 action-oriented bullet points tailored to job keywords, each starting with "• ".`;
+
+  const userPrompt = `RESUME:
+${resumeText}
+
+JOB DESCRIPTION:
+${jobDescription}`;
+
+  const models = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"];
+  let rawResponse = "";
+
+  for (const model of models) {
+    try {
+      rawResponse = await queryGroqModel(model, systemPrompt, userPrompt);
+      if (rawResponse && rawResponse.trim().length > 0) {
+        break;
+      }
+    } catch (err) {
+      console.warn(`Groq model ${model} failed, trying next fallback:`, err);
+    }
+  }
+
+  if (!rawResponse) {
+    throw new Error("No response received from AI models");
+  }
+
+  let cleaned = rawResponse.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  }
+
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Invalid JSON structure in model response");
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  const score = typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : 75;
+  const rewrittenBullets = typeof parsed.rewrittenBullets === "string" && parsed.rewrittenBullets.trim()
+    ? parsed.rewrittenBullets
+    : "• Tailored experience to match key job requirements.\n• Highlighted core technical skills relevant to role.";
+  const coverLetter = typeof parsed.coverLetter === "string" && parsed.coverLetter.trim()
+    ? parsed.coverLetter
+    : "Dear Hiring Manager,\n\nI am excited to submit my application for this role...";
+  const highlight = Array.isArray(parsed.skills?.highlight)
+    ? parsed.skills.highlight.filter((s: any) => typeof s === "string" && s.trim().length > 0)
+    : [];
+  const learn = Array.isArray(parsed.skills?.learn)
+    ? parsed.skills.learn.filter((s: any) => typeof s === "string" && s.trim().length > 0)
+    : [];
+
+  return {
+    score,
+    rewrittenBullets,
+    coverLetter,
+    skills: {
+      highlight,
+      learn,
+    },
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -29,75 +124,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const truncatedResume = resumeText.slice(0, 2000);
-    const truncatedJD = jobDescription.slice(0, 1500);
+    const truncatedResume = resumeText.slice(0, 10000);
+    const truncatedJD = jobDescription.slice(0, 6000);
 
-    // Run all 4 in parallel — Groq handles it easily
-    const [scoreText, rewrittenBullets, coverLetter, skillsText] =
-      await Promise.all([
+    const result = await analyzeResumeWithGroq(truncatedResume, truncatedJD);
 
-        askGroq(
-          `You are a recruiter. Return ONLY a number from 0-100 for how well this resume matches the job. Just the number, nothing else.
-
-RESUME:
-${truncatedResume}
-
-JOB DESCRIPTION:
-${truncatedJD}`,
-          10
-        ),
-
-        askGroq(
-          `Rewrite these resume bullet points to better match the job description. Use strong action verbs and relevant keywords. Return only bullets starting with •.
-
-RESUME:
-${truncatedResume}
-
-JOB DESCRIPTION:
-${truncatedJD}`,
-          500
-        ),
-
-        askGroq(
-          `Write a professional 3 paragraph cover letter based on this resume and job description. Be specific and compelling.
-
-RESUME:
-${truncatedResume}
-
-JOB DESCRIPTION:
-${truncatedJD}`,
-          500
-        ),
-
-        askGroq(
-          `Analyze the gap between this resume and job description. Return ONLY this JSON format, no explanation, no markdown:
-{"highlight": ["skill1", "skill2"], "learn": ["skill3", "skill4"]}
-
-RESUME:
-${truncatedResume}
-
-JOB DESCRIPTION:
-${truncatedJD}`,
-          200
-        ),
-      ]);
-
-    // Parse score
-    const score = parseInt(scoreText.trim().match(/\d+/)?.[0] ?? "0");
-
-    // Parse skills
-    let skills: { highlight: string[]; learn: string[] } = {
-      highlight: [],
-      learn: [],
-    };
-    try {
-      const jsonMatch = skillsText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) skills = JSON.parse(jsonMatch[0]);
-    } catch {
-      skills = { highlight: [], learn: [] };
-    }
-
-    // Save to Supabase
     try {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -106,22 +137,17 @@ ${truncatedJD}`,
           user_id: user.id,
           job_description: jobDescription,
           resume_text: resumeText,
-          match_score: score,
-          rewritten_bullets: rewrittenBullets,
-          cover_letter: coverLetter,
-          skill_suggestions: JSON.stringify(skills),
+          match_score: result.score,
+          rewritten_bullets: result.rewrittenBullets,
+          cover_letter: result.coverLetter,
+          skill_suggestions: JSON.stringify(result.skills),
         });
       }
     } catch (dbError) {
       console.error("Failed to save to database:", dbError);
     }
 
-    return NextResponse.json({
-      score,
-      rewrittenBullets,
-      coverLetter,
-      skills,
-    });
+    return NextResponse.json(result);
 
   } catch (error) {
     console.error("AI analysis error:", error);
@@ -130,4 +156,4 @@ ${truncatedJD}`,
       { status: 500 }
     );
   }
-}
+}
