@@ -25,7 +25,7 @@ export async function POST() {
         const order = await razorpay.orders.create({
             amount: PREMIUM_PRICE_PAISE,
             currency: "INR",
-            receipt: `premium_${user.id}_${Date.now()}`,
+            receipt: `prem_${user.id.slice(0, 8)}_${Date.now()}`,
             notes: {
                 user_id: user.id, // critical — the webhook reads this to know who paid
             },

@@ -5,6 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import { useAnalysisStore } from "@/src/store/useAnalysisStore";
 import Link from "next/link";
+import UpgradeButton from "@/src/components/UpgradeButton";
 
 export default function AnalyzePage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -99,13 +100,16 @@ export default function AnalyzePage() {
     <main className="max-w-3xl mx-auto px-8 py-12 flex flex-col gap-8">
       {/* Back + Header */}
       <div className="flex flex-col gap-3">
-        <Link
-          href="/dashboard"
-          className="group inline-flex items-center gap-2 bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-violet-500/50 text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 shadow-sm hover:shadow-violet-900/20 active:scale-[0.98] hover:-translate-y-0.5 w-fit"
-        >
-          <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1">←</span>
-          <span>Back to Dashboard</span>
-        </Link>
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 sm:gap-6">
+          <Link
+            href="/dashboard"
+            className="group inline-flex items-center gap-2 bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-violet-500/50 text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 shadow-sm hover:shadow-violet-900/20 active:scale-[0.98] hover:-translate-y-0.5 w-fit"
+          >
+            <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1">←</span>
+            <span>Back to Dashboard</span>
+          </Link>
+          <UpgradeButton />
+        </div>
         <h1 className="text-3xl font-bold mt-2">New Analysis</h1>
         <p className="text-gray-400">
           Upload your resume and paste the job description below.
