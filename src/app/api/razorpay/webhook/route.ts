@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
+const PLAN_DURATIONS: Record<string, number> = {
+    premium: 1, // months
+    pro: 2,     // months
+};
+
 export async function POST(req: Request) {
     console.log("🔔 WEBHOOK HIT AT", new Date().toISOString());
 
@@ -34,14 +39,15 @@ export async function POST(req: Request) {
     if (event.event === "order.paid") {
         const order = event.payload.order.entity;
         const userId = order.notes?.user_id;
+        const plan = order.notes?.plan;
 
-        if (!userId) {
-            console.error("Webhook received with no user_id in order notes");
-            return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
+        if (!userId || !plan || !PLAN_DURATIONS[plan]) {
+            console.error("Webhook received with missing/invalid user_id or plan", { userId, plan });
+            return NextResponse.json({ error: "Missing user_id or plan" }, { status: 400 });
         }
 
         const periodEnd = new Date();
-        periodEnd.setMonth(periodEnd.getMonth() + 1);
+        periodEnd.setMonth(periodEnd.getMonth() + PLAN_DURATIONS[plan]);
 
         const { error } = await supabaseAdmin
             .from("subscriptions")
@@ -49,6 +55,7 @@ export async function POST(req: Request) {
                 {
                     user_id: userId,
                     status: "active",
+                    plan,
                     current_period_end: periodEnd.toISOString(),
                 },
                 { onConflict: "user_id" }
@@ -59,7 +66,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "DB update failed" }, { status: 500 });
         }
 
-        console.log("✅ Subscription activated for user:", userId);
+        console.log(`✅ ${plan} subscription activated for user:`, userId);
     }
 
     return NextResponse.json({ received: true });

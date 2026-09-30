@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
-import { createClient } from "@/src/lib/supabase/server"; // your existing server client
+import { createClient } from "@/src/lib/supabase/server";
 
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID!,
-    key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
+const PLAN_PRICES: Record<string, number> = {
+    premium: 29900, // ₹299.00 in paise
+    pro: 49900,     // ₹499.00 in paise
+};
 
-const PREMIUM_PRICE_PAISE = 29900; // ₹299.00 — Razorpay amounts are in paise
+export async function POST(req: Request) {
+    const razorpay = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID!,
+        key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    });
 
-export async function POST() {
     const supabase = await createClient();
 
     const {
@@ -21,13 +24,20 @@ export async function POST() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { plan } = await req.json();
+
+    if (!plan || !PLAN_PRICES[plan]) {
+        return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
+    }
+
     try {
         const order = await razorpay.orders.create({
-            amount: PREMIUM_PRICE_PAISE,
+            amount: PLAN_PRICES[plan],
             currency: "INR",
             receipt: `prem_${user.id.slice(0, 8)}_${Date.now()}`,
             notes: {
-                user_id: user.id, // critical — the webhook reads this to know who paid
+                user_id: user.id,
+                plan, // "premium" or "pro" — read by the webhook
             },
         });
 
